@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import AudienceTracker from "@/components/store/AudienceTracker";
 import { getBoutiqueParSlug, getProduitPublic } from "../../data";
 import StoreProductClient from "./StoreProductClient";
 
@@ -20,6 +21,9 @@ export default async function StoreProductPage({
   }
 
   return (
-    <StoreProductClient boutique={boutique} produit={produit} slug={params.slug} />
+    <>
+      <AudienceTracker boutiqueId={boutique.id} produitId={produit.id} />
+      <StoreProductClient boutique={boutique} produit={produit} slug={params.slug} />
+    </>
   );
 }

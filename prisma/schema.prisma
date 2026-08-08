@@ -35,6 +35,7 @@ model Boutique {
   produits       Produit[]
   clients        Client[]
   commandes      Commande[]
+  visites        Visite[]
   abonnement     Abonnement?
 }
 
@@ -75,6 +76,7 @@ model Produit {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   lignesCommande LigneCommande[]
+  visites        Visite[]
 }
 
 model Client {
@@ -130,6 +132,20 @@ model Paiement {
   transactionId String?
   statut        StatutPaiement @default(EN_ATTENTE)
   createdAt     DateTime       @default(now())
+}
+
+model Visite {
+  id          String   @id @default(cuid())
+  boutiqueId  String
+  boutique    Boutique @relation(fields: [boutiqueId], references: [id])
+  produitId   String?
+  produit     Produit? @relation(fields: [produitId], references: [id])
+  visiteurId  String
+  createdAt   DateTime @default(now())
+
+  @@index([boutiqueId, createdAt])
+  @@index([boutiqueId, visiteurId, createdAt])
+  @@index([produitId, createdAt])
 }
 
 model Abonnement {
