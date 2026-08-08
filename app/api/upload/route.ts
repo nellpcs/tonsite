@@ -46,11 +46,11 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ url: blob.url });
-  } catch {
+  } catch (error) {
     return NextResponse.json(
       {
         error:
-          "Échec de l'envoi de l'image. Vérifiez que BLOB_READ_WRITE_TOKEN est configuré.",
+          error instanceof Error ? error.message : "Erreur inconnue lors de l'envoi de l'image.",
       },
       { status: 500 }
     );

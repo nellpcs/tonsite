@@ -23,10 +23,13 @@ export async function uploadImage(blob: Blob): Promise<UploadResult> {
     }
 
     return { success: true, url: data.url };
-  } catch {
+  } catch (error) {
     return {
       success: false,
-      error: "Échec de l'envoi de l'image. Vérifiez votre connexion.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Erreur inconnue lors de l'envoi de l'image.",
     };
   }
 }
