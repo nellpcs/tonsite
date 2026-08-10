@@ -49,6 +49,7 @@ export default function NouveauProduitPage() {
   const [description, setDescription] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [pendingFile, setPendingFile] = useState<string | null>(null);
+  const [pendingFilesQueue, setPendingFilesQueue] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isPromotion, setIsPromotion] = useState(false);
@@ -68,27 +69,64 @@ export default function NouveauProduitPage() {
   }
 
   function handleFileSelect(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!file) return;
+    if (files.length === 0) return;
 
     setPhotoError(null);
 
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setPhotoError("Format non supporté. Utilisez JPG, PNG ou WEBP.");
-      return;
-    }
-    if (file.size > MAX_SIZE) {
-      setPhotoError("Fichier trop volumineux (5 Mo maximum).");
+    const remainingSlots = 10 - images.length;
+    if (remainingSlots <= 0) {
+      setPhotoError("Vous ne pouvez pas ajouter plus de 10 photos.");
       return;
     }
 
-    setPendingFile(URL.createObjectURL(file));
+    const filesToProcess = files.slice(0, remainingSlots);
+    const validFiles: string[] = [];
+
+    for (const file of filesToProcess) {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        setPhotoError("Format non supporté. Utilisez JPG, PNG ou WEBP.");
+        return;
+      }
+      if (file.size > MAX_SIZE) {
+        setPhotoError("Fichier trop volumineux (5 Mo maximum).");
+        return;
+      }
+      const fileId = `${file.name}-${file.size}-${file.lastModified}`;
+      if (validFiles.includes(fileId) || images.some((img) => img.includes(file.name))) {
+        continue;
+      }
+      validFiles.push(fileId);
+    }
+
+    if (validFiles.length === 0) {
+      setPhotoError("Aucun fichier valide à ajouter (doublons détectés).");
+      return;
+    }
+
+    const objectUrls = validFiles.map((fileId) => {
+      const file = filesToProcess.find((f) => `${f.name}-${f.size}-${f.lastModified}` === fileId);
+      return file ? URL.createObjectURL(file) : null;
+    }).filter(Boolean) as string[];
+
+    setPendingFilesQueue(objectUrls);
+  }
+
+  function processNextFile() {
+    setPendingFilesQueue((prev) => {
+      const [next, ...rest] = prev;
+      if (next) {
+        setPendingFile(next);
+      }
+      return rest;
+    });
   }
 
   function cancelCrop() {
     if (pendingFile) URL.revokeObjectURL(pendingFile);
     setPendingFile(null);
+    setPendingFilesQueue([]);
   }
 
   async function handleCropped(blob: Blob) {
@@ -107,6 +145,10 @@ export default function NouveauProduitPage() {
     }
 
     setImages((prev) => [...prev, result.url as string]);
+
+    if (pendingFilesQueue.length > 0) {
+      processNextFile();
+    }
   }
 
   function removeImage(index: number) {
@@ -171,14 +213,9 @@ export default function NouveauProduitPage() {
       onSubmit={handleSubmit}
       className="flex flex-col gap-6 px-6 py-8 lg:px-10"
     >
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Ajouter un produit
-        </h1>
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Enregistrement..." : "Enregistrer"}
-        </Button>
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900">
+        Ajouter un produit
+      </h1>
 
       {serverError && (
         <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -229,11 +266,12 @@ export default function NouveauProduitPage() {
           id="photo-input"
           type="file"
           accept="image/jpeg,image/png,image/webp"
+          multiple
           onChange={handleFileSelect}
-          disabled={isUploadingPhoto}
+          disabled={isUploadingPhoto || images.length >= 10}
           className="hidden"
         />
-        <p className="text-xs text-gray-500">{images.length}/10 photos</p>
+        <p className="text-xs text-gray-500">{images.length + pendingFilesQueue.length}/10 photos</p>
         {photoError && (
           <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
             {photoError}
@@ -360,6 +398,20 @@ export default function NouveauProduitPage() {
           onChange={(e) => setDescription(e.target.value)}
         />
       </Card>
+
+      <div className="flex items-center justify-end gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => router.back()}
+          disabled={isSubmitting}
+        >
+          Annuler
+        </Button>
+        <Button type="submit" variant="primary" disabled={isSubmitting}>
+          {isSubmitting ? "Enregistrement..." : "Enregistrer"}
+        </Button>
+      </div>
     </form>
   );
 }

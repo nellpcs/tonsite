@@ -39,7 +39,7 @@ export default async function TableauDeBordPage() {
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Vues aujourd’hui"
+          label="Vues aujourd'hui"
           value={dashboard.viewsToday.toLocaleString("fr-FR")}
           change={dashboard.viewsChange}
           sparklineData={dashboard.viewsByDay}
@@ -48,11 +48,13 @@ export default async function TableauDeBordPage() {
           label="Commandes"
           value={dashboard.totalOrders}
           change={dashboard.ordersChange}
+          sparklineData={dashboard.ordersByDay}
         />
         <StatCard
           label="Produits"
           value={dashboard.totalProducts}
           change={dashboard.productsChange}
+          sparklineData={dashboard.productsByDay}
         />
         <StatCard
           label="Visiteurs (7 jours)"

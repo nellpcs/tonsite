@@ -6,6 +6,7 @@ import Link from "next/link";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
+import Skeleton from "@/components/ui/Skeleton";
 import Toggle from "@/components/ui/Toggle";
 import { cn, formatFcfa } from "@/lib/utils";
 import { listerProduits, toggleStatutProduit } from "./actions";
@@ -113,13 +114,36 @@ export default function ProduitsPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        {isLoading && (
-          <p className="py-12 text-center text-sm text-gray-500">
-            Chargement des produits...
-          </p>
+        {isLoading &&
+          Array.from({ length: 3 }).map((_, index) => (
+            <Card key={index} className="flex items-center gap-4">
+              <Skeleton className="h-14 w-14 shrink-0 rounded-xl" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+            </Card>
+          ))}
+
+        {!isLoading && products.length === 0 && (
+          <Card className="flex flex-col items-center gap-4 py-16 text-center">
+            <PackageIcon className="h-12 w-12 text-gray-300" />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium text-gray-900">
+                Aucun produit pour le moment
+              </p>
+              <p className="text-sm text-gray-500">
+                Commencez par ajouter votre premier produit pour remplir votre catalogue.
+              </p>
+            </div>
+            <Button href="/produits/nouveau" variant="primary">
+              <PlusIcon className="h-4 w-4" />
+              Ajouter un produit
+            </Button>
+          </Card>
         )}
 
-        {!isLoading &&
+        {!isLoading && products.length > 0 &&
           filteredProducts.map((product) => (
             <Card
               key={product.id}
@@ -175,7 +199,7 @@ export default function ProduitsPage() {
             </Card>
           ))}
 
-        {!isLoading && filteredProducts.length === 0 && (
+        {!isLoading && products.length > 0 && filteredProducts.length === 0 && (
           <p className="py-12 text-center text-sm text-gray-500">
             Aucun produit dans cette catégorie.
           </p>
@@ -232,6 +256,25 @@ function PlusIcon(props: SVGProps<SVGSVGElement>) {
       {...props}
     >
       <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function PackageIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M21 8l-9-5-9 5 9 5 9-5z" />
+      <path d="M3 8v8l9 5 9-5V8" />
+      <path d="M12 13v8" />
     </svg>
   );
 }

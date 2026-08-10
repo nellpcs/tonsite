@@ -16,10 +16,14 @@ function percentageChange(current: number, previous: number) {
   return Math.round(((current - previous) / previous) * 100);
 }
 
+function startOfDay(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
 export async function getDashboardData(boutiqueId: string) {
   const today = startOfTodayInCameroon();
   const sevenDaysAgo = new Date(today.getTime() - 6 * DAY_MS);
-  const previousSevenDaysAgo = new Date(today.getTime() - 13 * DAY_MS);
+  const fourteenDaysAgo = new Date(today.getTime() - 13 * DAY_MS);
 
   const [boutique, totalProducts, totalOrders, recentOrders, popularRows, viewsToday] =
     await Promise.all([
@@ -47,43 +51,85 @@ export async function getDashboardData(boutiqueId: string) {
       }),
     ]);
 
+  const [visitsRaw, visitorsRaw, ordersRaw, productsRaw] =
+    await Promise.all([
+      prisma.visite.findMany({
+        where: {
+          boutiqueId,
+          createdAt: { gte: sevenDaysAgo, lt: new Date(today.getTime() + DAY_MS) },
+        },
+        select: { createdAt: true },
+      }),
+      prisma.visite.findMany({
+        where: {
+          boutiqueId,
+          createdAt: { gte: sevenDaysAgo, lt: new Date(today.getTime() + DAY_MS) },
+        },
+        select: { visiteurId: true, createdAt: true },
+      }),
+      prisma.commande.findMany({
+        where: {
+          boutiqueId,
+          createdAt: { gte: sevenDaysAgo, lt: new Date(today.getTime() + DAY_MS) },
+        },
+        select: { createdAt: true },
+      }),
+      prisma.produit.findMany({
+        where: {
+          boutiqueId,
+          createdAt: { gte: sevenDaysAgo, lt: new Date(today.getTime() + DAY_MS) },
+        },
+        select: { createdAt: true },
+      }),
+    ]);
+
   const days = Array.from({ length: 7 }, (_, index) =>
-    new Date(sevenDaysAgo.getTime() + index * DAY_MS)
+    startOfDay(new Date(sevenDaysAgo.getTime() + index * DAY_MS))
   );
 
-  const [viewsByDay, visitorsByDay, ordersCurrentPeriod, ordersPreviousPeriod, newProductsCurrentPeriod, newProductsPreviousPeriod] =
+  const viewsByDay = days.map((day) =>
+    visitsRaw.filter((v) => startOfDay(v.createdAt).getTime() === day.getTime()).length
+  );
+
+  const visitorSets = new Map<string, Set<string>>();
+  visitorsRaw.forEach((v) => {
+    const dayKey = startOfDay(v.createdAt).getTime().toString();
+    if (!visitorSets.has(dayKey)) {
+      visitorSets.set(dayKey, new Set());
+    }
+    visitorSets.get(dayKey)!.add(v.visiteurId);
+  });
+  const visitorsByDay = days.map((day) => visitorSets.get(day.getTime().toString())?.size || 0);
+
+  const ordersByDay = days.map((day) =>
+    ordersRaw.filter((o) => startOfDay(o.createdAt).getTime() === day.getTime()).length
+  );
+  const productsByDay = days.map((day) =>
+    productsRaw.filter((p) => startOfDay(p.createdAt).getTime() === day.getTime()).length
+  );
+
+  const [previousVisits, previousVisitorsRaw, ordersCurrentPeriod, ordersPreviousPeriod, newProductsCurrentPeriod, newProductsPreviousPeriod] =
     await Promise.all([
-      Promise.all(
-        days.map((day) =>
-          prisma.visite.count({
-            where: {
-              boutiqueId,
-              createdAt: { gte: day, lt: new Date(day.getTime() + DAY_MS) },
-            },
-          })
-        )
-      ),
-      Promise.all(
-        days.map(async (day) =>
-          prisma.visite
-            .findMany({
-              where: {
-                boutiqueId,
-                createdAt: { gte: day, lt: new Date(day.getTime() + DAY_MS) },
-              },
-              distinct: ["visiteurId"],
-              select: { visiteurId: true },
-            })
-            .then((visites) => visites.length)
-        )
-      ),
+      prisma.visite.count({
+        where: {
+          boutiqueId,
+          createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo },
+        },
+      }),
+      prisma.visite.findMany({
+        where: {
+          boutiqueId,
+          createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo },
+        },
+        select: { visiteurId: true },
+      }),
       prisma.commande.count({
         where: { boutiqueId, createdAt: { gte: sevenDaysAgo } },
       }),
       prisma.commande.count({
         where: {
           boutiqueId,
-          createdAt: { gte: previousSevenDaysAgo, lt: sevenDaysAgo },
+          createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo },
         },
       }),
       prisma.produit.count({
@@ -92,34 +138,13 @@ export async function getDashboardData(boutiqueId: string) {
       prisma.produit.count({
         where: {
           boutiqueId,
-          createdAt: { gte: previousSevenDaysAgo, lt: sevenDaysAgo },
+          createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo },
         },
       }),
     ]);
 
-  const visitorCount = await prisma.visite
-    .findMany({
-      where: { boutiqueId, createdAt: { gte: sevenDaysAgo } },
-      distinct: ["visiteurId"],
-      select: { visiteurId: true },
-    })
-    .then((visites) => visites.length);
-  const previousViews = await prisma.visite.count({
-    where: {
-      boutiqueId,
-      createdAt: { gte: previousSevenDaysAgo, lt: sevenDaysAgo },
-    },
-  });
-  const previousVisitors = await prisma.visite
-    .findMany({
-      where: {
-        boutiqueId,
-        createdAt: { gte: previousSevenDaysAgo, lt: sevenDaysAgo },
-      },
-      distinct: ["visiteurId"],
-      select: { visiteurId: true },
-    })
-    .then((visites) => visites.length);
+  const visitorCount = new Set(visitorsRaw.map((v) => v.visiteurId)).size;
+  const previousVisitorCount = new Set(previousVisitorsRaw.map((v) => v.visiteurId)).size;
 
   const products = await prisma.produit.findMany({
     where: { boutiqueId, id: { in: popularRows.map((row) => row.produitId) } },
@@ -133,18 +158,20 @@ export async function getDashboardData(boutiqueId: string) {
     viewsByDay,
     viewsChange: percentageChange(
       viewsByDay.reduce((total, count) => total + count, 0),
-      previousViews
+      previousVisits
     ),
     visitorCount,
     visitorsByDay,
-    visitorsChange: percentageChange(visitorCount, previousVisitors),
+    visitorsChange: percentageChange(visitorCount, previousVisitorCount),
     totalOrders,
     ordersChange: percentageChange(ordersCurrentPeriod, ordersPreviousPeriod),
+    ordersByDay,
     totalProducts,
     productsChange: percentageChange(
       newProductsCurrentPeriod,
       newProductsPreviousPeriod
     ),
+    productsByDay,
     recentOrders,
     popularProducts: popularRows.flatMap((row) => {
       const product = productsById.get(row.produitId);
